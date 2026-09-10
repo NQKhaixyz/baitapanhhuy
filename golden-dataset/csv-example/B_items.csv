@@ -1,0 +1,7 @@
+item_id,type_id,type,specialty,question,answer_gt,is_answerable
+item_00001,1,Định nghĩa bệnh,Tim mạch,Tăng huyết áp được định nghĩa như thế nào ở người trưởng thành?,"Ở người trưởng thành, tăng huyết áp được xác định khi HA tâm thu ≥140 mmHg và/hoặc tâm trương ≥90 mmHg (đo chuẩn tại phòng khám).",True
+item_00002,5,Tiêu chuẩn chẩn đoán,Tim mạch,Phân độ tăng huyết áp gồm mấy độ và ngưỡng ra sao?,"THA chia 3 độ: độ 1 (140–159/90–99), độ 2 (160–179/100–109), độ 3 (≥180/≥110) mmHg.",True
+item_00003,6,Chẩn đoán phân biệt,Tim mạch,Cơn tăng huyết áp cấp cứu khác cơn khẩn trương ở điểm nào?,"Khác nhau ở tổn thương cơ quan đích: cấp cứu có tổn thương cơ quan đích cấp (cần hạ áp ngay bằng đường TM), khẩn trương thì chưa có (hạ áp bằng đường uống trong vài giờ–ngày).",True
+item_00004,7,Cận lâm sàng / xét nghiệm,Nội tiết,Bệnh nhân nghi đái tháo đường cần làm xét nghiệm gì để chẩn đoán?,"Định lượng glucose huyết tương lúc đói, HbA1c, hoặc nghiệm pháp dung nạp glucose 75g; đạt 1 trong các ngưỡng chẩn đoán là xác định ĐTĐ.",True
+item_00005,11,Chống chỉ định,Nội tiết,Bệnh nhân đái tháo đường có eGFR 20 ml/phút có dùng được metformin không?,Không. Metformin chống chỉ định khi eGFR <30 ml/phút; với eGFR 20 cần chuyển sang nhóm thuốc khác.,True
+item_00006,10,Liều lượng thuốc,Nội tiết,Liều insulin nền khởi đầu cho bệnh nhân này là bao nhiêu đơn vị?,Không đủ dữ kiện / guideline không nêu con số cố định — cần cá thể hóa theo cân nặng và đường huyết. Chatbot nên nêu rõ giới hạn thay vì bịa số.,False

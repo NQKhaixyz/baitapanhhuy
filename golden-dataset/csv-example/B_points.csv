@@ -1,0 +1,12 @@
+point_id,citation_id,text,verbatim_quote
+item_00001_c1_p1,item_00001_c1,THA khi HA tâm thu ≥140 mmHg và/hoặc HA tâm trương ≥90 mmHg,HA tâm thu ≥140 mmHg và/hoặc HA tâm trương ≥90 mmHg
+item_00001_c1_p2,item_00001_c1,Ngưỡng áp dụng cho đo chuẩn tại phòng khám,qua đo chuẩn tại phòng khám
+item_00002_c1_p1,item_00002_c1,THA độ 1: HATT 140–159 hoặc HATTr 90–99,độ 1 (140–159/90–99)
+item_00002_c1_p2,item_00002_c1,THA độ 2: HATT 160–179 hoặc HATTr 100–109,độ 2 (160–179/100–109)
+item_00002_c1_p3,item_00002_c1,THA độ 3: HATT ≥180 hoặc HATTr ≥110,độ 3 (≥180/≥110)
+item_00003_c1_p1,item_00003_c1,THA cấp cứu: HA tăng rất cao KÈM tổn thương cơ quan đích cấp,KÈM tổn thương cơ quan đích cấp
+item_00003_c2_p2,item_00003_c2,THA khẩn trương: chưa có tổn thương cơ quan đích cấp,chưa có tổn thương cơ quan đích cấp
+item_00004_c1_p1,item_00004_c1,"Glucose huyết tương lúc đói ≥7,0 mmol/L","glucose đói ≥7,0 mmol/L"
+item_00004_c1_p2,item_00004_c1,"HbA1c ≥6,5%","HbA1c ≥6,5%"
+item_00004_c1_p3,item_00004_c1,"OGTT 75g: glucose 2h ≥11,1 mmol/L","glucose 2h sau OGTT 75g ≥11,1 mmol/L"
+item_00005_c1_p1,item_00005_c1,Metformin chống chỉ định khi eGFR <30,chống chỉ định khi eGFR <30

@@ -1,0 +1,6 @@
+numpy>=1.26
+google-genai>=1.0.0
+langgraph>=0.2
+python-dotenv>=1.0
+# Tùy chọn nếu muốn dùng OpenAI thay Gemini:
+# openai>=1.50.0
