@@ -6,7 +6,7 @@ from langgraph.graph import END, START, StateGraph
 from .config import GREETING_RESPONSE, OFF_TOPIC_RESPONSE, RETRIEVAL_THRESHOLD, TOP_K
 from .retrieval import Retriever
 from .synthesis import synthesize_answer
-from .citations import cite_answer
+from .core import QuestionClassifier, cite_answer
 
 LOGGER = logging.getLogger('mini_rag.graph')
 
@@ -25,11 +25,19 @@ class GraphState(TypedDict, total=False):
     answerability: dict
     generation: dict
     citation_contract_ok: bool
+    classification_source: str
+    classification_model: str | None
+    classification_api_calls: int
 
 
-def validate_node(state: GraphState, retriever: Retriever) -> dict:
-    category = retriever.subjects.classify(state['standalone_query'])
-    result = {'category': category}
+def validate_node(state: GraphState, retriever: Retriever,
+                  classifier: QuestionClassifier | None = None) -> dict:
+    classifier = classifier or QuestionClassifier(retriever.subjects)
+    category, diagnostics = classifier.classify(state['standalone_query'])
+    result = {'category': category,
+              'classification_source': diagnostics.get('source'),
+              'classification_model': diagnostics.get('model'),
+              'classification_api_calls': diagnostics.get('api_calls', 0)}
     if category != 'medical':
         result.update(answer=GREETING_RESPONSE if category == 'greeting' else OFF_TOPIC_RESPONSE,
                       rejected=category != 'greeting', citations=[])
@@ -46,12 +54,14 @@ def route_node(state: GraphState, retriever: Retriever) -> dict:
 class MiniRAGGraph:
     def __init__(self, retriever: Retriever, memory=None, generator=None, *,
                  top_k: int = TOP_K, threshold: float = RETRIEVAL_THRESHOLD,
-                 enable_rewrite: bool = True, prompt_variant: str = 'standard'):
+                 enable_rewrite: bool = True, prompt_variant: str = 'standard',
+                 classifier: QuestionClassifier | None = None):
         if top_k < 1:
             raise ValueError('top_k phải >= 1')
         self.retriever, self.generator = retriever, generator
         self.top_k, self.threshold = top_k, threshold
         self.enable_rewrite, self.prompt_variant = enable_rewrite, prompt_variant
+        self.classifier = classifier or QuestionClassifier(retriever.subjects)
         self.memory = memory
         if enable_rewrite and self.memory is None:
             from .conversation import ConversationMemory
@@ -92,7 +102,7 @@ class MiniRAGGraph:
 
     def _build_langgraph(self):
         graph = StateGraph(GraphState)
-        graph.add_node('validate', lambda s: validate_node(s, self.retriever))
+        graph.add_node('validate', lambda s: validate_node(s, self.retriever, self.classifier))
         graph.add_node('route', lambda s: route_node(s, self.retriever))
         graph.add_node('retrieve', self._retrieve)
         graph.add_node('synthesize', self._synthesize)

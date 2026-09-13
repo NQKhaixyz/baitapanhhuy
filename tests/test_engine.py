@@ -11,7 +11,8 @@ from rag_engine.conversation import ConversationMemory
 from rag_engine.graph import MiniRAGGraph
 from rag_engine.retrieval import Retriever
 from rag_engine.synthesis import claims_have_citations, synthesize_answer
-from rag_engine.evaluation import answer_checks, retrieval_metrics
+from rag_engine.evaluation import answer_checks
+from rag_engine.core import retrieval_metrics
 
 
 def test_retriever_returns_known_chunk():

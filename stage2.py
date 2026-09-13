@@ -26,7 +26,9 @@ def main() -> None:
     questions = [row["question"] for row in read_jsonl(DEFAULT_QA_PATH)] if args.all else ([args.query] if args.query else ["xin chào", "thời tiết hôm nay thế nào?"])
     for question in questions:
         state = graph.invoke(question)
-        print(f"\nQ: {question}\ncategory={state.get('category')} guidelines={state.get('guideline_ids')}\nA: {state['answer']}")
+        print(f"\nQ: {question}\ncategory={state.get('category')} "
+              f"classifier={state.get('classification_source')} "
+              f"guidelines={state.get('guideline_ids')}\nA: {state['answer']}")
         if state.get("hits"):
             print("context:", [(h["chunk_id"], h["score"]) for h in state["hits"]])
 

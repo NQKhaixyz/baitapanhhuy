@@ -19,7 +19,7 @@ from .config import (
 from .embeddings import get_embedding_provider, load_or_create_embeddings, normalize_rows
 from .guardrails import content_terms
 from .io_utils import read_jsonl
-from .language import SubjectIndex
+from .core import SubjectIndex
 
 LOGGER = logging.getLogger("mini_rag.retrieve")
 

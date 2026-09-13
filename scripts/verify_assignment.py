@@ -48,7 +48,7 @@ def main():
     from rag_engine.guardrails import REFUSAL, is_pure_refusal
     from rag_engine.synthesis import GeminiAnswerGenerator
     from rag_engine.io_utils import read_jsonl, write_json
-    from rag_engine.metrics import retrieval_metrics
+    from rag_engine.core import retrieval_metrics
     threshold=float(env.get('RAG_RETRIEVAL_THRESHOLD','0.18'))
     mode='offline' if args.offline else 'live'
     commands=[['stage0.py','--all'],['stage1.py','--all'],['stage2.py','--all'],['stage3.py'],

@@ -10,7 +10,7 @@ from pathlib import Path
 from rag_engine.config import (ROOT_DIR, DEFAULT_CORPUS_PATH, DEFAULT_QA_PATH,
     DEFAULT_EVAL_OUTPUT, RETRIEVAL_THRESHOLD, TOP_K, MIN_QUERY_COVERAGE, ROUTE_MARGIN)
 from rag_engine.evaluation import answer_checks
-from rag_engine.metrics import gold_chunk_ids, retrieval_metrics
+from rag_engine.core import gold_chunk_ids, retrieval_metrics
 from rag_engine.graph import MiniRAGGraph
 from rag_engine.io_utils import read_jsonl, write_json, ensure_utf8_output
 from rag_engine.retrieval import Retriever
@@ -43,6 +43,9 @@ def run_eval(output_path=DEFAULT_EVAL_OUTPUT, *, top_k=TOP_K, threshold=RETRIEVA
             'scores': {h['chunk_id']:h['score'] for h in hits},
             'answer': state['answer'], 'answer_sha256': digest(state['answer']),
             'category': state['category'], 'guideline_ids': state.get('guideline_ids', []),
+            'classification_source': state.get('classification_source'),
+            'classification_model': state.get('classification_model'),
+            'classification_api_calls': state.get('classification_api_calls', 0),
             'rejected': state['rejected'], 'generation': generation,
             'checks': answer_checks(row, state['answer'], hits, generation.get('status')),
         })
@@ -67,6 +70,8 @@ def run_eval(output_path=DEFAULT_EVAL_OUTPUT, *, top_k=TOP_K, threshold=RETRIEVA
             'embedding_model':getattr(retriever.provider, 'model', None),
             'embedding_dimension':retriever.vectors.shape[1],
             'generation_models':sorted({i['generation']['model'] for i in results if i['generation'].get('model')}),
+            'classifier_mode': graph.classifier.mode,
+            'classifier_model': graph.classifier.model,
             'prompt_variant':prompt_variant,
             'prompt_sha256':digest(GROUNDING_INSTRUCTION+PROMPT_VARIANTS[prompt_variant]),
             'min_query_coverage':MIN_QUERY_COVERAGE, 'route_margin':ROUTE_MARGIN,
@@ -118,7 +123,8 @@ def compare_reports(before: dict, after: dict) -> dict:
     prior = {i['id']:i for i in before['items']}
     changed = [i['id'] for i in after['items'] if prior.get(i['id'],{}).get('answer') != i['answer']]
     fields = ['code_sha256','corpus_sha256','qa_sha256','embedding_provider','embedding_model',
-              'generation_models','min_query_coverage','route_margin']
+              'generation_models','classifier_mode','classifier_model',
+              'min_query_coverage','route_margin']
     differences = [key for key in fields if before.get('provenance',{}).get(key)!=after.get('provenance',{}).get(key)]
     differences += [key for key in ['top_k','retrieval_threshold'] if before.get(key)!=after.get(key)]
     summaries = {key:after.get('answer_summary',{}).get(key)-value

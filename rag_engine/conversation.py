@@ -5,7 +5,7 @@ import re
 from .config import CONTEXTUAL_EXACT, CONTEXTUAL_PREFIXES, DEFAULT_CORPUS_PATH, MAX_HISTORY
 from .embeddings import normalize_text
 from .io_utils import read_jsonl
-from .language import SubjectIndex
+from .core import SubjectIndex
 
 
 # Follow-up ngắn thường bỏ tên bệnh/thuốc ("Liều dùng bao nhiêu?", "Phân

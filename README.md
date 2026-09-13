@@ -32,6 +32,13 @@ trong `.env`. Corpus được encode theo batch 8 document, lưu `.npy` chuẩn 
 query dùng task type retrieval query. Generation cache phân biệt model và toàn
 bộ prompt; các response đọc lại vẫn phải qua hậu kiểm hiện tại.
 
+Các helper dùng chung đã được gộp vào `rag_engine/core.py` để repo ít file hơn.
+Validator có classifier ba chế độ: `rules` (nhanh, tái lập), `hybrid` (mặc định
+khi có key: rule cho ca rõ, LLM Gemini cho ca mơ hồ), và `llm` (gọi LLM cho
+mọi câu không rỗng). LLM chỉ trả một nhãn `greeting`/`medical`/`off_topic`,
+có cache và luôn fallback về rule khi lỗi. Đặt `RAG_CLASSIFIER=rules` nếu cần
+chạy hoàn toàn xác định; đặt `RAG_CLASSIFIER=llm` khi muốn ép dùng classifier.
+
 Chạy offline thật, kể cả máy đã có API key:
 
 ```powershell
@@ -65,6 +72,10 @@ C3 rewrite → C2 validate → C2 route → C0 retrieve → C1 synthesize → C1
 - Greeting có câu hỏi phía sau vẫn được xử lý như câu hỏi. Validator tách chủ đề
   y khoa khỏi việc corpus có đáp án; câu y khoa ngoài corpus được từ chối vì
   thiếu nguồn, không tự động gọi là lạc đề.
+- Phân loại không giao toàn bộ cho LLM vì đây là control plane: greeting và ca
+  rõ phải dừng nhanh, không tốn lượt gọi và không phụ thuộc model. Chế độ
+  `hybrid` vẫn dùng LLM cho câu mơ hồ để nhận ra câu hỏi y khoa ngoài corpus,
+  nhưng lỗi mạng/quota không làm engine sập.
 - Router ưu tiên chủ đề/guideline được nhắc rõ; có thể giữ nhiều guideline.
   Khi không có chủ đề rõ, dùng điểm cosine theo guideline. Lọc candidate trước
   khi tính top-k; log có toàn bộ `candidates_before_search`, rồi ID và score.

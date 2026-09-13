@@ -12,7 +12,7 @@ import logging
 from rag_engine.config import DEFAULT_QA_PATH, TOP_K
 from rag_engine.io_utils import read_jsonl
 from rag_engine.retrieval import Retriever
-from rag_engine.metrics import gold_chunk_ids
+from rag_engine.core import gold_chunk_ids
 from rag_engine.io_utils import ensure_utf8_output
 
 

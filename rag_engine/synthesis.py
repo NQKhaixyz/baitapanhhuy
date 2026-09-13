@@ -26,7 +26,7 @@ from .guardrails import (
     unsupported_numbers,
     REFUSAL, is_pure_refusal, numeric_violations, required_comparison_sources,
 )
-from .citations import answer_is_grounded, claims_have_citations, citation_ids
+from .core import answer_is_grounded, claims_have_citations, citation_ids
 
 LOGGER = logging.getLogger("mini_rag.synthesis")
 _LAST_API_CALL = 0.0

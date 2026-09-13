@@ -1,9 +1,9 @@
 """Mechanical checks aid, but never replace, manual answer review."""
 from __future__ import annotations
 from typing import Any
-from .metrics import gold_chunk_ids, retrieval_metrics
+from .core import gold_chunk_ids, retrieval_metrics
 from .guardrails import content_terms, numeric_terms, is_pure_refusal, refusal_text, numeric_violations
-from .citations import citation_ids, claims_have_citations
+from .core import citation_ids, claims_have_citations
 from .synthesis import answer_violations
 
 

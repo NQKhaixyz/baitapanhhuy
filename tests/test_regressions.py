@@ -13,10 +13,11 @@ from rag_engine.conversation import ConversationMemory
 from rag_engine.guardrails import REFUSAL, numeric_violations
 from rag_engine.synthesis import synthesize_answer, answer_violations
 from rag_engine.evaluation import answer_checks
-from rag_engine.metrics import retrieval_metrics
+from rag_engine.core import retrieval_metrics
 from eval import attach_review, review_template, compare_reports, digest
 from rag_engine.embeddings import LocalHashEmbedding, load_or_create_embeddings
-from rag_engine.citations import cite_answer, claims_have_citations
+from rag_engine.core import (cite_answer, claims_have_citations,
+                             QuestionClassifier)
 
 
 class Fixed:
@@ -128,6 +129,22 @@ def test_generic_followup_keeps_subject_but_new_drug_does_not():
     assert 'metformin' in memory.rewrite('Liều dùng bao nhiêu?').lower()
     new_topic='Liều amlodipine khởi đầu là bao nhiêu mg?'
     assert memory.rewrite(new_topic)==new_topic
+
+
+def test_hybrid_classifier_uses_rules_for_clear_cases(monkeypatch, retriever):
+    classifier=QuestionClassifier(retriever.subjects,mode='hybrid')
+    monkeypatch.setattr(classifier,'_llm_result',lambda _q: pytest.fail('clear case must not call LLM'))
+    assert classifier.classify('xin chào')[0]=='greeting'
+    assert classifier.classify('Liều amlodipine là bao nhiêu?')[0]=='medical'
+
+
+def test_llm_classifier_handles_ambiguous_case_and_reports_source(monkeypatch, retriever):
+    classifier=QuestionClassifier(retriever.subjects,mode='hybrid')
+    monkeypatch.setattr(classifier,'_llm_result',lambda _q: ('medical',{
+        'source':'llm','model':'fake','api_calls':1,'cache_hit':False}))
+    category, diagnostics=classifier.classify('What should I do about migraine?')
+    assert category=='medical'
+    assert diagnostics['source']=='llm' and diagnostics['api_calls']==1
 
 
 def test_explicit_topic_switch_does_not_import_old_subject(retriever):
