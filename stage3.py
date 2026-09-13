@@ -1,5 +1,7 @@
 """Chặng 3 — hội thoại nhiều lượt, rewrite trước validate.
-uv run python .\stage3.py """
+
+Ví dụ: ``uv run python .\\stage3.py``
+"""
 
 from __future__ import annotations
 

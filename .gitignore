@@ -4,6 +4,8 @@ __pycache__/
 *.egg-info/
 .cache/
 artifacts/*.json
+# Eval reports, logs, caches and manual-review artifacts are generated locally.
+artifacts/
 .env
 .pytest_cache/
 .DS_Store

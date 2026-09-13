@@ -8,9 +8,18 @@ from typing import Any, Iterable
 
 import numpy as np
 
-from .config import DEFAULT_CORPUS_PATH, DEFAULT_EMBEDDING_CACHE, RETRIEVAL_THRESHOLD
+from .config import (
+    DEFAULT_CORPUS_PATH,
+    DEFAULT_EMBEDDING_CACHE,
+    MAX_ROUTE_GUIDELINES,
+    MIN_QUERY_COVERAGE,
+    RETRIEVAL_THRESHOLD,
+    ROUTE_MARGIN,
+)
 from .embeddings import get_embedding_provider, load_or_create_embeddings, normalize_rows
+from .guardrails import content_terms
 from .io_utils import read_jsonl
+from .language import SubjectIndex
 
 LOGGER = logging.getLogger("mini_rag.retrieve")
 
@@ -51,6 +60,8 @@ class Retriever:
         )
         if len(self.vectors) != len(self.chunks):
             raise ValueError("Số vector không khớp số chunk")
+        self._corpus_terms = set().union(*(content_terms(text) for text in texts))
+        self.subjects = SubjectIndex(self.chunks)
 
     @staticmethod
     def _search_text(chunk: dict[str, Any]) -> str:
@@ -64,11 +75,37 @@ class Retriever:
             for key in ("guideline_title", "section_path", "text")
         )
 
+    def _query_vector(self, query: str) -> np.ndarray:
+        """Encode query một lần để router và retriever dùng chung."""
+
+        return normalize_rows(
+            self.provider.encode([query], task_type="RETRIEVAL_QUERY")
+        )[0]
+
+    def _rank_candidates(
+        self,
+        query_vector: np.ndarray,
+        allowed_guideline_ids: Iterable[str] | None = None,
+    ) -> list[tuple[int, float]]:
+        allowed = set(allowed_guideline_ids) if allowed_guideline_ids is not None else None
+        indices = [i for i, chunk in enumerate(self.chunks)
+                   if allowed is None or chunk.get("guideline_id") in allowed]
+        LOGGER.info("retrieve candidates_before_search=%s", [self.chunks[i]["chunk_id"] for i in indices])
+        scores = self.vectors[indices] @ query_vector
+        candidates = [
+            (index, float(score))
+            for index, score in zip(indices, scores)
+        ]
+        candidates.sort(key=lambda pair: (-pair[1], self.chunks[pair[0]]["chunk_id"]))
+        return candidates
+
     def search(
         self,
         query: str,
         k: int = 3,
         allowed_guideline_ids: Iterable[str] | None = None,
+        *,
+        query_vector: np.ndarray | None = None,
     ) -> list[dict[str, Any]]:
         """Tìm top-k chunk bằng cosine similarity.
 
@@ -83,17 +120,10 @@ class Retriever:
             ``score`` và toàn bộ object ``chunk`` để synthesis dùng làm context.
         """
 
-        query_vector = normalize_rows(
-            self.provider.encode([query], task_type="RETRIEVAL_QUERY")
-        )[0]
-        scores = self.vectors @ query_vector
-        allowed = set(allowed_guideline_ids) if allowed_guideline_ids else None
-        candidates = [
-            (index, float(score))
-            for index, score in enumerate(scores)
-            if allowed is None or self.chunks[index].get("guideline_id") in allowed
-        ]
-        candidates.sort(key=lambda pair: (-pair[1], self.chunks[pair[0]]["chunk_id"]))
+        if k < 1:
+            raise ValueError("k phải >= 1")
+        query_vector = query_vector if query_vector is not None else self._query_vector(query)
+        candidates = self._rank_candidates(query_vector, allowed_guideline_ids)
         hits = [
             {
                 "chunk_id": self.chunks[index]["chunk_id"],
@@ -105,10 +135,91 @@ class Retriever:
         LOGGER.info("retrieve query=%r k=%d hits=%s", query, k, [(h["chunk_id"], h["score"]) for h in hits])
         return hits
 
+    def has_lexical_evidence(self, query: str) -> bool:
+        """Kiểm tra nhanh query có thuật ngữ chung với corpus hay không.
+
+        Đây là bước validation rẻ, không gọi embedding/API và giúp chặn câu
+        ngoài phạm vi trước khi bước retrieve chạy.
+        """
+
+        return bool(content_terms(query) & self._corpus_terms)
+
+    def route_guidelines(
+        self,
+        query: str,
+        *,
+        max_guidelines: int = MAX_ROUTE_GUIDELINES,
+        margin: float = ROUTE_MARGIN,
+    ) -> tuple[list[str], dict[str, float], np.ndarray]:
+        """Chọn guideline theo điểm embedding và metadata corpus.
+
+        Không biết trước tên guideline hay domain. Guideline đứng đầu được giữ;
+        các guideline gần điểm đầu trong ``margin`` cũng được giữ để không làm
+        mất context khi câu hỏi liên quan nhiều tài liệu.
+        """
+
+        query_vector = self._query_vector(query)
+        explicit = list(dict.fromkeys(gid for _, gid in self.subjects.subjects(query)))
+        grouped: dict[str, float] = {}
+        for index, score in self._rank_candidates(query_vector):
+            guideline_id = str(self.chunks[index].get("guideline_id", ""))
+            grouped[guideline_id] = max(grouped.get(guideline_id, float("-inf")), score)
+        if explicit:
+            return explicit, {gid: round(grouped[gid], 6) for gid in explicit}, query_vector
+        ranked = sorted(grouped.items(), key=lambda pair: (-pair[1], pair[0]))
+        if not ranked:
+            return [], {}, query_vector
+        top_score = ranked[0][1]
+        # Viết vòng lặp rõ ràng để giới hạn số guideline mà không phụ thuộc tên.
+        selected = []
+        for guideline_id, score in ranked:
+            if len(selected) >= max_guidelines:
+                break
+            if not selected or top_score - score <= margin:
+                selected.append((guideline_id, score))
+        selected_ids = [guideline_id for guideline_id, _score in selected]
+        selected_scores = {guideline_id: round(score, 6) for guideline_id, score in selected}
+        return selected_ids, selected_scores, query_vector
+
     def best_score(self, query: str, allowed_guideline_ids: Iterable[str] | None = None) -> float:
         """Lấy cosine score cao nhất của query sau khi áp dụng filter."""
         hits = self.search(query, 1, allowed_guideline_ids)
         return hits[0]["score"] if hits else 0.0
+
+    def assess_answerability(
+        self,
+        query: str,
+        hits: list[dict[str, Any]],
+        threshold: float = RETRIEVAL_THRESHOLD,
+        min_query_coverage: float = MIN_QUERY_COVERAGE,
+    ):
+        """Proxy để caller không cần biết module guardrail nội bộ."""
+
+        from .guardrails import assess_answerability
+
+        return assess_answerability(
+            query,
+            hits,
+            threshold=threshold,
+            min_query_coverage=min_query_coverage,
+        )
+
+    def search_pairs(
+        self,
+        query: str,
+        k: int = 3,
+        allowed_guideline_ids: Iterable[str] | None = None,
+    ) -> list[tuple[str, float]]:
+        """Trả đúng contract tối giản ``[(chunk_id, score), ...]``.
+
+        ``search`` giữ thêm toàn bộ chunk để synthesis dùng làm context. Chặng
+        retrieval có thể dùng method này khi chỉ cần ID và điểm, không kéo theo
+        dữ liệu nội dung trong output.
+        """
+        return [
+            (hit["chunk_id"], float(hit["score"]))
+            for hit in self.search(query, k, allowed_guideline_ids)
+        ]
 
     @staticmethod
     def is_confident(hits: list[dict[str, Any]], threshold: float = RETRIEVAL_THRESHOLD) -> bool:

@@ -44,8 +44,8 @@ def _features(text: str) -> list[str]:
     """Tách một văn bản thành các đặc trưng cho vector hashing cục bộ.
 
     Ba nhóm đặc trưng được dùng gồm token đơn, cặp token liên tiếp và
-    character n-gram. Một nhóm alias nhỏ giúp các thuật ngữ trong corpus 8
-    đoạn (ví dụ THA và tăng huyết áp) có thêm tín hiệu tương đồng.
+    character n-gram. Không có alias theo domain trong engine; nếu ứng dụng
+    cần synonym thì truyền chúng qua provider embedding hoặc cấu hình riêng.
 
     Args:
         text: Văn bản cần mã hóa.
@@ -60,21 +60,6 @@ def _features(text: str) -> list[str]:
     # Character n-gram giúp bắt các biến thể có dấu, viết tắt và số đo.
     padded = f"  {normalized}  "
     features.extend(f"c:{padded[i:i + 3]}" for i in range(max(0, len(padded) - 2)))
-    # Từ đồng nghĩa y khoa trong corpus nhỏ; không thay thế semantic model.
-    aliases = {
-        "huyết áp": "tha",
-        "tha": "tăng huyết áp",
-        "đái tháo đường": "dtd",
-        "đái đường": "dtd",
-        "cấp cứu": "khẩn trương",
-        "khẩn trương": "cấp cứu",
-        "xét nghiệm": "chẩn đoán",
-        "chẩn đoán": "xét nghiệm",
-        "định nghĩa": "tiêu chuẩn",
-    }
-    for source, target in aliases.items():
-        if source in normalized:
-            features.append(f"alias:{target}")
     return features
 
 
@@ -262,6 +247,8 @@ def get_embedding_provider():
     Returns:
         Một object có phương thức ``encode(texts, task_type=...)``.
     """
+    if os.getenv("RAG_OFFLINE") == "1":
+        return LocalHashEmbedding()
     provider = os.getenv("RAG_EMBEDDING_PROVIDER", "gemini" if os.getenv("GEMINI_API_KEY") else "local").lower()
     if provider == "gemini":
         try:
@@ -300,7 +287,9 @@ def load_or_create_embeddings(
     cache_path = Path(cache_path)
     metadata_path = cache_path.with_name(cache_path.name + ".meta.json")
     provider = provider or get_embedding_provider()
-    provider_key = f"{type(provider).__name__}:{getattr(provider, 'model', '')}:{task_type or ''}"
+    # Đổi feature schema phải làm cache cũ vô hiệu; nếu không vector local cũ
+    # có thể còn alias domain đã bị loại khỏi code.
+    provider_key = f"embedding-schema-v2:{type(provider).__name__}:{getattr(provider, 'model', '')}:{getattr(provider, 'dimension', '')}:{task_type or ''}"
     fingerprint = hashlib.sha256(
         (provider_key + "\n" + "\n".join(texts)).encode("utf-8")
     ).hexdigest()
@@ -309,7 +298,8 @@ def load_or_create_embeddings(
             metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
             if metadata.get("fingerprint") == fingerprint:
                 cached = np.load(cache_path, allow_pickle=False)
-                return np.asarray(cached, dtype=np.float32)
+                if cached.ndim == 2 and cached.shape[0] == len(texts) and np.isfinite(cached).all():
+                    return normalize_rows(np.asarray(cached, dtype=np.float32))
         except (OSError, KeyError, ValueError, json.JSONDecodeError):
             pass
     vectors = provider.encode(texts, task_type=task_type)

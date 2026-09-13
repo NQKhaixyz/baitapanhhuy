@@ -12,7 +12,7 @@ import logging
 from rag_engine.config import DEFAULT_QA_PATH, TOP_K
 from rag_engine.io_utils import read_jsonl
 from rag_engine.retrieval import Retriever
-from rag_engine.evaluation import gold_chunk_ids
+from rag_engine.metrics import gold_chunk_ids
 from rag_engine.io_utils import ensure_utf8_output
 
 
@@ -29,6 +29,8 @@ def main() -> None:
     parser.add_argument("--all", action="store_true", help="Chạy toàn bộ QA golden")
     parser.add_argument("-k", type=int, default=TOP_K)
     args = parser.parse_args()
+    if args.k < 1:
+        parser.error("k phải >= 1")
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s | %(message)s")
     retriever = Retriever()
     rows = read_jsonl(DEFAULT_QA_PATH) if args.all or not args.query else []
@@ -37,18 +39,31 @@ def main() -> None:
         queries.append(("manual", args.query, set()))
     if not queries:
         parser.error("Cần --query hoặc --all")
-    hits_correct = 0
     answerable = 0
+    complete_hits = 0
+    partial_recall = 0.0
     for item_id, query, gold in queries:
-        hits = retriever.search(query, args.k)
+        hits = retriever.search_pairs(query, args.k)
         print(f"\n[{item_id}] {query}")
-        for rank, hit in enumerate(hits, 1):
-            print(f"  {rank}. {hit['chunk_id']} score={hit['score']:.4f}")
+        for rank, (chunk_id, score) in enumerate(hits, 1):
+            print(f"  {rank}. {chunk_id} score={score:.4f}")
         if gold:
             answerable += 1
-            hits_correct += int(bool(set(hit["chunk_id"] for hit in hits[:3]) & gold))
+            retrieved = {chunk_id for chunk_id, _score in hits[: min(args.k, 3)]}
+            # Một câu có thể có nhiều chunk vàng (00003). Chỉ tính query hit
+            # khi toàn bộ tập chunk cần thiết đã nằm trong top-k.
+            complete_hits += int(gold.issubset(retrieved))
+            partial_recall += len(gold & retrieved) / len(gold)
     if answerable:
-        print(f"\nrecall@3={hits_correct}/{answerable}={hits_correct / answerable:.4f}")
+        reported_k = min(args.k, 3)
+        print(
+            f"\ncomplete_retrieval_rate@{reported_k} (đủ toàn bộ chunk vàng)="
+            f"{complete_hits}/{answerable}={complete_hits / answerable:.4f}"
+        )
+        print(
+            f"recall@{reported_k} (tỷ lệ chunk)="
+            f"{partial_recall / answerable:.4f}"
+        )
 
 
 if __name__ == "__main__":

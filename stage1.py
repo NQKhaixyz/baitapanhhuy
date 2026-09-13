@@ -9,7 +9,7 @@ from rag_engine.config import DEFAULT_QA_PATH, RETRIEVAL_THRESHOLD, TOP_K
 from rag_engine.evaluation import answer_checks
 from rag_engine.io_utils import ensure_utf8_output, read_jsonl
 from rag_engine.retrieval import Retriever
-from rag_engine.synthesis import GeminiAnswerGenerator, GeminiQuotaError, synthesize_answer
+from rag_engine.synthesis import GeminiQuotaError, synthesize_answer
 
 
 def main() -> None:
@@ -24,6 +24,8 @@ def main() -> None:
     parser.add_argument("--all", action="store_true")
     parser.add_argument("-k", type=int, default=TOP_K)
     args = parser.parse_args()
+    if args.k < 1:
+        parser.error("k phải >= 1")
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s | %(message)s")
     retriever = Retriever()
     rows = read_jsonl(DEFAULT_QA_PATH) if args.all or not args.query else []
@@ -31,20 +33,18 @@ def main() -> None:
         rows.append({"id": "manual", "question": args.query, "meta": {"is_answerable": True}})
     if not rows:
         parser.error("Cần --query hoặc --all")
-    generator = None
     try:
         for row in rows:
             question = row["question"]
             hits = retriever.search(question, args.k)
-            forced = "insulin" in question.lower() and not any("insulin" in h["chunk"].get("text", "").lower() for h in hits)
-            if not forced and hits and float(hits[0]["score"]) >= RETRIEVAL_THRESHOLD:
-                generator = generator or GeminiAnswerGenerator()
+            answerability = retriever.assess_answerability(
+                question, hits, RETRIEVAL_THRESHOLD
+            )
             answer = synthesize_answer(
                 question,
                 hits,
                 threshold=RETRIEVAL_THRESHOLD,
-                force_unanswerable=forced,
-                generator=generator,
+                answerability=answerability,
             )
             print(f"\n[{row['id']}] {question}\n→ {answer}")
             if row["id"] != "manual":
