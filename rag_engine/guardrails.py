@@ -12,6 +12,7 @@ import re
 from typing import Any, Iterable
 
 from .embeddings import normalize_text
+from .core import citation_ids
 
 
 TOKEN_RE = re.compile(r"[0-9]+(?:[.,][0-9]+)?|[A-Za-zÀ-ỹĐđ]+", re.UNICODE)
@@ -38,9 +39,10 @@ def content_terms(text: str, stopwords: Iterable[str] = DEFAULT_STOPWORDS) -> se
 
 
 def numeric_terms(text: str) -> set[str]:
-    """Lấy các số trong text, chuẩn hóa dấu thập phân đơn giản."""
+    """Lấy số lâm sàng, bỏ chữ số nằm trong định danh như ``HbA1c``."""
 
-    return {value.replace(",", ".") for value in re.findall(r"\d+(?:[.,]\d+)?", text)}
+    pattern = r"(?<![A-Za-zÀ-ỹĐđ])\d+(?:[.,]\d+)?"
+    return {value.replace(",", ".") for value in re.findall(pattern, text)}
 
 
 @dataclass(frozen=True)
@@ -186,7 +188,7 @@ def numeric_violations(question: str, answer: str, hits: list[dict]) -> list[str
     # Bind quantities to their cited source, not merely any number in the context.
     by_id = {h['chunk_id']: str(h['chunk'].get('text', '')) for h in hits}
     for clause in re.split(r"\n+|(?<=[.!?;])\s+(?!\[)", answer):
-        ids = re.findall(r"\[([^\]]+)\]", clause)
+        ids = citation_ids(clause)
         source = ' '.join(by_id.get(i, '') for i in ids)
         for quantity in re.findall(rf"\b{NUMBER}\s*(?:đơn vị|mg|mcg|µg|IU|U/kg)\b", clause, re.I):
             normalized = re.sub(r"\s+", "", quantity).lower()

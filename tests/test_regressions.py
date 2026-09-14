@@ -10,12 +10,14 @@ from rag_engine.io_utils import read_jsonl
 from rag_engine.retrieval import Retriever
 from rag_engine.graph import MiniRAGGraph
 from rag_engine.conversation import ConversationMemory
-from rag_engine.guardrails import REFUSAL, numeric_violations
+from rag_engine.guardrails import REFUSAL, numeric_terms, numeric_violations
 from rag_engine.synthesis import synthesize_answer, answer_violations
-from rag_engine.evaluation import answer_checks, probe_answer_checks
+from rag_engine.evaluation import (answer_checks, probe_answer_checks,
+                                   reference_terms_present)
 from rag_engine.core import retrieval_metrics
 from eval import attach_review, review_template, compare_reports, digest
-from rag_engine.embeddings import LocalHashEmbedding, load_or_create_embeddings
+from rag_engine.embeddings import (LocalHashEmbedding, get_embedding_provider,
+                                   load_or_create_embeddings)
 from rag_engine.core import (cite_answer, claims_have_citations,
                              QuestionClassifier)
 
@@ -244,6 +246,14 @@ def test_compact_comma_separated_citations_are_valid():
     ])
     assert result['citation_contract_ok']
     assert result['citations'] == ['acute', 'urgent']
+    assert not numeric_violations('Liều là bao nhiêu?', 'Liều 5 mg [acute, urgent].', [
+        {'chunk_id': 'acute', 'chunk': {'text': 'Liều 5 mg.'}},
+        {'chunk_id': 'urgent', 'chunk': {'text': 'Nguồn bổ sung.'}},
+    ])
+
+
+def test_numeric_terms_ignore_digits_inside_medical_identifiers():
+    assert numeric_terms('HbA1c ≥6,5% và OGTT 75g') == {'6.5', '75'}
 
 
 def test_conclusion_can_inherit_immediately_previous_citation():
@@ -275,13 +285,59 @@ def test_focused_diagnostic_answer_is_not_forced_to_list_other_thresholds():
     assert not numeric_violations('Ngưỡng xét nghiệm A là bao nhiêu?', answer, hits)
 
 
+def test_eval_does_not_require_source_numbers_omitted_by_answer_reference():
+    item = {
+        'question': 'Cần làm xét nghiệm gì?',
+        'answer_gt': 'Làm xét nghiệm A hoặc xét nghiệm B; đạt 1 trong các ngưỡng.',
+        'retrieval_gt': [{'points': [
+            {'verbatim_quote': 'xét nghiệm A ≥7,0'},
+            {'verbatim_quote': 'xét nghiệm B ≥6,5'},
+        ]}],
+    }
+    assert reference_terms_present(item, 'Cần làm xét nghiệm A và xét nghiệm B [source].')
+
+
 def test_probe_contract_reports_correctness_and_false_refusal_separately():
-    item = {'expected': {'answerable': True, 'must_include': ['45', '30'],
-                         'must_include_any': [['dùng được', 'có thể dùng']]}}
-    good = probe_answer_checks(item, 'eGFR 45 cao hơn 30 nên có thể dùng [source].', [])
-    refused = probe_answer_checks(item, REFUSAL, [], 'refused')
+    item = {
+        'question': 'eGFR 45 có dùng được metformin không?',
+        'retrieval_gt': [{'chunk_ids': ['source']}],
+        'expected': {'answerable': True, 'must_include': ['45', '30'],
+                     'must_include_any': [['dùng được', 'có thể dùng']],
+                     'must_not_include': ['không dùng được']},
+    }
+    hits = [
+        {'chunk_id': 'source', 'score': .9,
+         'chunk': {'text': 'Metformin chống chỉ định khi eGFR <30.'}},
+        {'chunk_id': 'other', 'score': .8, 'chunk': {'text': 'Nguồn khác.'}},
+    ]
+    good = probe_answer_checks(
+        item, 'eGFR 45 cao hơn 30 nên có thể dùng [source].', hits, 'answered')
+    wrong = probe_answer_checks(
+        item, 'eGFR 45 cao hơn 30 nhưng không dùng được [source].', hits, 'answered')
+    wrong_source = probe_answer_checks(
+        item, 'eGFR 45 cao hơn 30 nên có thể dùng [other].', hits, 'answered')
+    refused = probe_answer_checks(item, REFUSAL, hits, 'refused')
     assert good['answer_correct'] and not good['false_refusal']
+    assert not wrong['answer_correct'] and wrong['forbidden_terms_present']
+    assert not wrong_source['answer_correct'] and not wrong_source['gold_citations_ok']
     assert not refused['answer_correct'] and refused['false_refusal']
+
+
+def test_answer_checks_require_the_gold_source_not_only_an_allowed_hit():
+    item = {
+        'question': 'Ngưỡng là bao nhiêu?',
+        'meta': {'is_answerable': True},
+        'retrieval_gt': [{'chunk_ids': ['gold'],
+                          'points': [{'verbatim_quote': 'ngưỡng 30'}]}],
+    }
+    hits = [
+        {'chunk_id': 'gold', 'chunk': {'text': 'ngưỡng 30'}},
+        {'chunk_id': 'other', 'chunk': {'text': 'nội dung khác'}},
+    ]
+    checks = answer_checks(item, 'Ngưỡng là 30 [other].', hits, 'answered')
+    assert checks['citation_ids_valid']
+    assert not checks['gold_citations_ok']
+    assert not checks['mechanical_checks_pass']
 
 
 def test_prompt_comparison_reports_deltas_without_claiming_semantic_improvement():
@@ -341,6 +397,12 @@ def test_offline_flag_overrides_credentials_and_provider(monkeypatch):
     monkeypatch.setenv('GEMINI_API_KEY','not-a-real-key')
     assert isinstance(get_embedding_provider(),LocalHashEmbedding)
     with pytest.raises(RuntimeError,match='offline'): GeminiAnswerGenerator()
+
+
+def test_unknown_embedding_provider_fails_fast(monkeypatch):
+    monkeypatch.setenv('RAG_EMBEDDING_PROVIDER', 'typo')
+    with pytest.raises(ValueError, match='gemini, openai hoặc local'):
+        get_embedding_provider()
 
 
 @pytest.mark.parametrize('module,blocked', [('stage0',['rag_engine.synthesis','langgraph']),

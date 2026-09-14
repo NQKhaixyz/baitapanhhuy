@@ -267,7 +267,12 @@ def get_embedding_provider():
             return LocalHashEmbedding()
     if provider == "openai":
         return OpenAIEmbedding(os.getenv("RAG_EMBEDDING_MODEL", "text-embedding-3-small"))
-    return LocalHashEmbedding()
+    if provider == "local":
+        return LocalHashEmbedding()
+    raise ValueError(
+        "RAG_EMBEDDING_PROVIDER phải là gemini, openai hoặc local; "
+        f"đã nhận {provider!r}"
+    )
 
 
 def load_or_create_embeddings(
