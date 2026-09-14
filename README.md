@@ -144,7 +144,8 @@ quyết định cụ thể và ghi chú; template để trống không được 
 
 Bộ `evaluation-dataset/round3_aliases.jsonl` là probe độc lập, không sửa golden
 dataset. Nó có 8 câu hỏi dùng cách gọi khác và ba ca eGFR 20/35/45. Mỗi dòng
-khai báo các tín hiệu tối thiểu cần có trong câu trả lời. Khi chạy với Gemini,
+khai báo các tín hiệu tối thiểu cần có/không được có trong câu trả lời; câu đạt
+còn phải dùng citation hợp lệ và trích đúng gold chunk. Khi chạy với Gemini,
 `eval.py --qa ...` báo đúng hai chỉ số: `answer_correct_rate` (đạt hợp đồng
 tín hiệu) và `false_refusal_rate` (đáng lẽ trả lời được nhưng bị từ chối hoặc
 fallback). Đây là phép đo hồi quy có thể tái lập, vẫn cần đọc tay để kết luận
@@ -155,7 +156,7 @@ fallback). Đây là phép đo hồi quy có thể tái lập, vẫn cần đọ
 | Vòng | Test tự động | Probe answer-correct | Probe false-refusal |
 |---|---:|---:|---:|
 | Trước sửa guardrail (8 câu của vòng 2) | 59/59 | 6/8 = 75% | 2/8 = 25% |
-| Sau sửa guardrail (11 câu Round 3) | 63/63 | 11/11 = 100% | 0/11 = 0% |
+| Sau audit bổ sung (11 câu Round 3) | 67/67 | 11/11 = 100% | 0/11 = 0% |
 
 Report luôn ghi provider embedding, model, số chiều và classifier. Nếu Gemini
 không khả dụng, provider local/fallback được in rõ và các ca fallback không
