@@ -21,6 +21,18 @@ uv run python eval.py --write-review-template
 uv run python -m pytest -q
 ```
 
+Muốn thử bằng giao diện web thay vì đọc terminal:
+
+```powershell
+uv run python web_app.py --open
+```
+
+Sau đó mở `http://127.0.0.1:8000`. Giao diện có tab riêng cho C0–C4,
+hiển thị query viết lại, phân loại, guideline được route, chunk/score, trạng thái
+generation và citation. C3 giữ lịch sử theo phiên trình duyệt và có nút xóa;
+C4 chạy được cả Golden lẫn bộ Round 3. Terminal mặc định chỉ hiện cảnh báo/lỗi;
+thêm `--verbose` khi muốn xem log chi tiết của từng node.
+
 Nếu không dùng uv: tạo venv, `pip install -r requirements.txt`, rồi
 `pip install pytest` để chạy kiểm thử. Chỉ copy `.env.example` khi chưa có `.env`.
 Không cần xóa cache khi đổi nội dung corpus/model; fingerprint tự làm cache cũ
@@ -158,7 +170,7 @@ fallback). Đây là phép đo hồi quy có thể tái lập, vẫn cần đọ
 | Vòng | Test tự động | Probe answer-correct | Probe false-refusal |
 |---|---:|---:|---:|
 | Trước sửa guardrail (8 câu của vòng 2) | 59/59 | 6/8 = 75% | 2/8 = 25% |
-| Sau audit bổ sung (11 câu Round 3) | 74/74 | 11/11 = 100% | 0/11 = 0% |
+| Sau audit bổ sung + web UI (11 câu Round 3) | 82/82 | 11/11 = 100% | 0/11 = 0% |
 
 Report luôn ghi provider embedding, model, số chiều và classifier. Nếu Gemini
 không khả dụng, provider local/fallback được in rõ và các ca fallback không

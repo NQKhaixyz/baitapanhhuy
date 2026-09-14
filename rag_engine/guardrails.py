@@ -184,12 +184,35 @@ def numeric_violations(question: str, answer: str, hits: list[dict]) -> list[str
             if not value or not re.search(r"dùng|sử dụng|chống chỉ định", question, re.I):
                 continue
             n = value.group(1)
-            if "chống chỉ định" in normalize_text(source) and relation_holds(n, op, bound):
-                if not {n.replace(',', '.'), bound.replace(',', '.')}.issubset(numeric_terms(plain)):
-                    errors.append(f"Cần áp dụng ngưỡng cho bệnh nhân: {measure} {n} {op} {bound}.")
+            if "chống chỉ định" not in normalize_text(source):
+                continue
+            required_numbers = {n.replace(',', '.'), bound.replace(',', '.')}
+            if not required_numbers.issubset(numeric_terms(plain)):
+                errors.append(f"Cần áp dụng ngưỡng cho bệnh nhân: {measure} {n} so với {bound}.")
+            if relation_holds(n, op, bound):
                 if (not re.search(r"không.{0,25}dùng|chống chỉ định", plain, re.I)
                         or re.search(r"(?:có thể|được phép)\s+(?:sử dụng|dùng)", plain, re.I)):
                     errors.append("Kết luận phải phù hợp chống chỉ định trong nguồn.")
+            else:
+                normalized_plain = normalize_text(plain)
+                explicit_outside = re.search(
+                    r"không.{0,35}(?:thuộc|nằm|bị).{0,35}chống chỉ định|"
+                    r"không chống chỉ định",
+                    normalized_plain,
+                )
+                permission = re.search(
+                    r"(?:có thể|được)\s+(?:sử dụng|dùng)|(?:sử dụng|dùng)\s+được",
+                    normalized_plain,
+                )
+                uncertain = re.search(
+                    r"(?:không nêu rõ|không thể xác định|chưa thể xác định)"
+                    r".{0,50}(?:sử dụng|dùng)",
+                    normalized_plain,
+                )
+                if not explicit_outside and (not permission or uncertain):
+                    errors.append(
+                        "Cần kết luận rõ giá trị không thuộc ngưỡng chống chỉ định theo tiêu chí trong nguồn."
+                    )
     return errors
 
 

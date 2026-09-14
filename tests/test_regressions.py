@@ -24,6 +24,7 @@ from rag_engine.embeddings import (LocalHashEmbedding, get_embedding_provider,
                                    load_or_create_embeddings)
 from rag_engine.core import (cite_answer, claims_have_citations,
                              QuestionClassifier)
+from web_app import parse_run_request
 
 
 class Fixed:
@@ -48,6 +49,27 @@ def test_generation_cache_key_includes_generation_parameters(monkeypatch):
     original = generation_cache_key('model', 'prompt')
     monkeypatch.setitem(GENERATION_PARAMETERS, 'temperature', 0.9)
     assert generation_cache_key('model', 'prompt') != original
+
+
+def test_web_request_validation_accepts_each_stage():
+    for stage in '0123':
+        parsed = parse_run_request({'stage': stage, 'query': 'eGFR 45?', 'k': 3,
+                                    'threshold': 0.18, 'session': 'browser-1'})
+        assert parsed['stage'] == stage
+    assert parse_run_request({'stage': '4', 'dataset': 'round3'})['dataset'] == 'round3'
+
+
+@pytest.mark.parametrize('payload', [
+    {'stage': '9', 'query': 'x'},
+    {'stage': '0', 'query': ''},
+    {'stage': '0', 'query': 'x', 'k': 0},
+    {'stage': '0', 'query': 'x', 'threshold': 1.1},
+    {'stage': '4', 'dataset': '../golden'},
+    {'stage': '3', 'query': 'x', 'session': '<script>'},
+])
+def test_web_request_validation_rejects_invalid_input(payload):
+    with pytest.raises(ValueError):
+        parse_run_request(payload)
 
 
 @pytest.mark.parametrize('query,category', [
@@ -98,6 +120,18 @@ def test_numeric_guard_is_not_tied_to_golden_values(value,limit):
         f'Có thể dùng vì {value} lớn hơn {limit} [source].',hits)
     assert not numeric_violations(f'marker {value} có dùng thuốc X không?',
         f'Không dùng vì {value} < {limit}, chống chỉ định [source].',hits)
+
+
+def test_numeric_guard_requires_clear_conclusion_outside_contraindication():
+    hits = [{'chunk_id': 'source', 'score': .9,
+             'chunk': {'text': 'Thuốc X chống chỉ định khi marker <30.'}}]
+    question = 'marker 45 có dùng thuốc X không?'
+    unclear = ('Thuốc X chống chỉ định khi marker <30 [source]. '
+               'Marker 45 ≥30 nhưng tài liệu không nêu rõ có dùng được không [source].')
+    clear = ('Thuốc X chống chỉ định khi marker <30 [source]. '
+             'Marker 45 ≥30 nên không thuộc ngưỡng chống chỉ định này [source].')
+    assert numeric_violations(question, unclear, hits)
+    assert not numeric_violations(question, clear, hits)
 
 
 def test_disclaimer_plus_dose_is_not_correct_refusal(retriever):
