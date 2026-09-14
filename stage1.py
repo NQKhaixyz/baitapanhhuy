@@ -28,6 +28,11 @@ def main() -> None:
         parser.error("k phải >= 1")
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s | %(message)s")
     retriever = Retriever()
+    print(
+        f"embedding_provider={type(retriever.provider).__name__} "
+        f"model={getattr(retriever.provider, 'model', None)} "
+        f"dimension={retriever.vectors.shape[1]}"
+    )
     rows = read_jsonl(DEFAULT_QA_PATH) if args.all or not args.query else []
     if args.query:
         rows.append({"id": "manual", "question": args.query, "meta": {"is_answerable": True}})

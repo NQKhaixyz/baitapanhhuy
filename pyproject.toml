@@ -23,3 +23,4 @@ include = ["rag_engine*"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-q"
+pythonpath = ["."]

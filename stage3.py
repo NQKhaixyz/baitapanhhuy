@@ -27,7 +27,13 @@ def main() -> None:
         "Metformin dùng khi nào?",
         "Còn chống chỉ định?",
     ]
-    graph = MiniRAGGraph(Retriever(), ConversationMemory())
+    retriever = Retriever()
+    print(
+        f"embedding_provider={type(retriever.provider).__name__} "
+        f"model={getattr(retriever.provider, 'model', None)} "
+        f"dimension={retriever.vectors.shape[1]}"
+    )
+    graph = MiniRAGGraph(retriever, ConversationMemory(subjects=retriever.subjects))
     for question in questions:
         before = graph.memory.history[-1]["question"] if graph.memory.history else "(trống)"
         state = graph.invoke(question)

@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import logging
 import os
 import re
 import time
@@ -20,6 +21,7 @@ from typing import Sequence
 import numpy as np
 
 TOKEN_RE = re.compile(r"[\wÀ-ỹ]+", flags=re.UNICODE)
+LOGGER = logging.getLogger("mini_rag.embedding")
 
 
 def normalize_text(text: str) -> str:
@@ -258,6 +260,10 @@ def get_embedding_provider():
             # provider=gemini nhưng chưa cài SDK/key.
             if os.getenv("RAG_EMBEDDING_PROVIDER") == "gemini":
                 raise
+            LOGGER.warning(
+                "Gemini embedding unavailable; falling back to LocalHashEmbedding. "
+                "Set RAG_EMBEDDING_PROVIDER=gemini to fail fast instead."
+            )
             return LocalHashEmbedding()
     if provider == "openai":
         return OpenAIEmbedding(os.getenv("RAG_EMBEDDING_MODEL", "text-embedding-3-small"))

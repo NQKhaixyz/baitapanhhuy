@@ -137,6 +137,12 @@ def compare_reports(before: dict, after: dict) -> dict:
 
 
 def print_report(report: dict):
+    provenance = report.get('provenance', {})
+    print('Embedding provider:', provenance.get('embedding_provider'),
+          'model=', provenance.get('embedding_model'),
+          'dimension=', provenance.get('embedding_dimension'))
+    print('Classifier:', provenance.get('classifier_mode'),
+          'model=', provenance.get('classifier_model'))
     print('ID           recall@1 recall@3 MRR  quote refusal generation')
     for item in report['items']:
         m=retrieval_metrics([item]); c=item['checks']
