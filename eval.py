@@ -9,7 +9,7 @@ import logging
 from pathlib import Path
 from rag_engine.config import (ROOT_DIR, DEFAULT_CORPUS_PATH, DEFAULT_QA_PATH,
     DEFAULT_EVAL_OUTPUT, RETRIEVAL_THRESHOLD, TOP_K, MIN_QUERY_COVERAGE, ROUTE_MARGIN)
-from rag_engine.evaluation import answer_checks
+from rag_engine.evaluation import answer_checks, probe_answer_checks
 from rag_engine.core import gold_chunk_ids, retrieval_metrics
 from rag_engine.graph import MiniRAGGraph
 from rag_engine.io_utils import read_jsonl, write_json, ensure_utf8_output
@@ -23,12 +23,13 @@ def digest(value) -> str:
 
 
 def run_eval(output_path=DEFAULT_EVAL_OUTPUT, *, top_k=TOP_K, threshold=RETRIEVAL_THRESHOLD,
-             generator=None, prompt_variant='standard') -> dict:
+             generator=None, prompt_variant='standard', qa_path=DEFAULT_QA_PATH) -> dict:
     if top_k < 1:
         raise ValueError('k phải >= 1')
     if prompt_variant not in PROMPT_VARIANTS:
         raise ValueError('Unknown prompt variant')
-    rows = read_jsonl(DEFAULT_QA_PATH)
+    qa_path = Path(qa_path)
+    rows = read_jsonl(qa_path)
     retriever = Retriever()
     graph = MiniRAGGraph(retriever, generator=generator, top_k=top_k, threshold=threshold,
                          enable_rewrite=False, prompt_variant=prompt_variant)
@@ -48,10 +49,26 @@ def run_eval(output_path=DEFAULT_EVAL_OUTPUT, *, top_k=TOP_K, threshold=RETRIEVA
             'classification_api_calls': state.get('classification_api_calls', 0),
             'rejected': state['rejected'], 'generation': generation,
             'checks': answer_checks(row, state['answer'], hits, generation.get('status')),
+            'probe_checks': probe_answer_checks(row, state['answer'], hits,
+                                                generation.get('status')),
         })
     source_files = sorted(list(ROOT_DIR.glob('*.py')) + list((ROOT_DIR/'rag_engine').glob('*.py')))
     code_hash = digest({str(p.relative_to(ROOT_DIR)):digest(p.read_bytes()) for p in source_files})
     answerable = [i for i in results if i['checks']['answerable']]
+    probe_rows = [i['probe_checks'] for i in results if i.get('probe_checks')]
+    probe_answerable = [p for p in probe_rows if p['answerable_expected']]
+    probe_correct = sum(p['answer_correct'] for p in probe_answerable)
+    probe_false_refusals = sum(p['false_refusal'] for p in probe_answerable)
+    probe_metrics = {
+        'total': len(probe_rows),
+        'answerable_count': len(probe_answerable),
+        'answer_correct_count': probe_correct,
+        'answer_correct_rate': round(probe_correct / len(probe_answerable), 4)
+        if probe_answerable else None,
+        'false_refusal_count': probe_false_refusals,
+        'false_refusal_rate': round(probe_false_refusals / len(probe_answerable), 4)
+        if probe_answerable else None,
+    }
     summary = {
         'answerable_count': len(answerable), 'unanswerable_count':len(results)-len(answerable),
         'correct_refusal':sum(i['checks'].get('correct_refusal', False) for i in results),
@@ -59,13 +76,14 @@ def run_eval(output_path=DEFAULT_EVAL_OUTPUT, *, top_k=TOP_K, threshold=RETRIEVA
         'verbatim_quote_pass':sum(i['checks'].get('verbatim_quotes_in_context', False) for i in answerable),
         'fallback_count':sum(i['generation']['status']=='fallback' for i in results),
         'manually_reviewed':0, 'manual_correct':None,
+        'probe_metrics': probe_metrics,
     }
     report = {
         'schema_version':2, 'generated_at':datetime.now(timezone.utc).isoformat(),
-        'dataset':str(DEFAULT_QA_PATH), 'top_k':top_k, 'retrieval_threshold':threshold,
+        'dataset':str(qa_path), 'top_k':top_k, 'retrieval_threshold':threshold,
         'provenance':{
             'code_sha256':code_hash, 'corpus_sha256':digest(DEFAULT_CORPUS_PATH.read_bytes()),
-            'qa_sha256':digest(DEFAULT_QA_PATH.read_bytes()),
+            'qa_sha256':digest(qa_path.read_bytes()),
             'embedding_provider':type(retriever.provider).__name__,
             'embedding_model':getattr(retriever.provider, 'model', None),
             'embedding_dimension':retriever.vectors.shape[1],
@@ -151,6 +169,11 @@ def print_report(report: dict):
               f"{str(c.get('correct_refusal','-')):7} {item['generation']['status']}")
     print('Retrieval metrics:',report['metrics'])
     print('Mechanical checks (NOT semantic accuracy):',report['answer_summary'])
+    probe = report.get('answer_summary', {}).get('probe_metrics', {})
+    if probe.get('answerable_count'):
+        print('Probe metrics (explicit contract):',
+              f"answer_correct_rate={probe.get('answer_correct_rate'):.2%}",
+              f"false_refusal_rate={probe.get('false_refusal_rate'):.2%}")
     print('Answer correctness requires manual review against answer_gt and corpus.')
 
 
@@ -158,6 +181,8 @@ def main():
     ensure_utf8_output()
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--output')
+    parser.add_argument('--qa', default=str(DEFAULT_QA_PATH),
+                        help='JSONL evaluation dataset (default: golden QA set)')
     parser.add_argument('-k','--k',type=int,default=TOP_K)
     parser.add_argument('--threshold',type=float,default=RETRIEVAL_THRESHOLD)
     parser.add_argument('--prompt-variant',choices=tuple(PROMPT_VARIANTS),default='standard')
@@ -180,7 +205,8 @@ def main():
         write_json(args.output or args.review_report,report)
     else:
         report=run_eval(args.output or DEFAULT_EVAL_OUTPUT, top_k=args.k,
-                        threshold=args.threshold,prompt_variant=args.prompt_variant)
+                        threshold=args.threshold,prompt_variant=args.prompt_variant,
+                        qa_path=args.qa)
         if args.write_review_template:
             path=Path(args.output or DEFAULT_EVAL_OUTPUT).with_suffix('.review.json')
             write_json(path,review_template(report))

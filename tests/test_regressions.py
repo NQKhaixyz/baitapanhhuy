@@ -12,7 +12,7 @@ from rag_engine.graph import MiniRAGGraph
 from rag_engine.conversation import ConversationMemory
 from rag_engine.guardrails import REFUSAL, numeric_violations
 from rag_engine.synthesis import synthesize_answer, answer_violations
-from rag_engine.evaluation import answer_checks
+from rag_engine.evaluation import answer_checks, probe_answer_checks
 from rag_engine.core import retrieval_metrics
 from eval import attach_review, review_template, compare_reports, digest
 from rag_engine.embeddings import LocalHashEmbedding, load_or_create_embeddings
@@ -263,6 +263,15 @@ def test_focused_diagnostic_answer_is_not_forced_to_list_other_thresholds():
         'text':'Chẩn đoán bệnh khi: xét nghiệm A ≥7,0 hoặc xét nghiệm B ≥6,5.'}}]
     answer='Ngưỡng xét nghiệm A là ≥7,0 [diagnosis].'
     assert not numeric_violations('Ngưỡng xét nghiệm A là bao nhiêu?', answer, hits)
+
+
+def test_probe_contract_reports_correctness_and_false_refusal_separately():
+    item = {'expected': {'answerable': True, 'must_include': ['45', '30'],
+                         'must_include_any': [['dùng được', 'có thể dùng']]}}
+    good = probe_answer_checks(item, 'eGFR 45 cao hơn 30 nên có thể dùng [source].', [])
+    refused = probe_answer_checks(item, REFUSAL, [], 'refused')
+    assert good['answer_correct'] and not good['false_refusal']
+    assert not refused['answer_correct'] and refused['false_refusal']
 
 
 def test_prompt_comparison_reports_deltas_without_claiming_semantic_improvement():

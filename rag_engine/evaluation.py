@@ -5,6 +5,7 @@ from .core import gold_chunk_ids, retrieval_metrics
 from .guardrails import content_terms, numeric_terms, is_pure_refusal, refusal_text, numeric_violations
 from .core import citation_ids, claims_have_citations
 from .synthesis import answer_violations
+from .embeddings import normalize_text
 
 
 def reference_terms_present(item: dict, answer: str) -> bool:
@@ -49,3 +50,40 @@ def answer_checks(item: dict[str, Any], answer: str, hits: list[dict],
             'violations': errors, 'mechanical_checks_pass': bool(mechanical),
             'answer_correct': None, 'manual_review_required': True,
             'answer_gt_reference': item.get('answer_gt', '')}
+
+
+def probe_answer_checks(item: dict[str, Any], answer: str, hits: list[dict],
+                        generation_status: str | None = None) -> dict[str, Any] | None:
+    """Evaluate an external alias/probe row with explicit expected signals.
+
+    This is intentionally separate from the golden mechanical checks. The
+    probe file can state the minimum observable evidence for a paraphrased
+    question without changing the read-only golden dataset. It reports an
+    auditable contract, not a claim of full semantic understanding.
+    """
+    expected = item.get('expected')
+    if not isinstance(expected, dict):
+        return None
+    normalized = normalize_text(answer)
+    answerable = bool(expected.get('answerable', True))
+    refused = is_pure_refusal(answer) or generation_status in {'refused', 'fallback'}
+    required = [normalize_text(str(term)) for term in expected.get('must_include', [])]
+    alternatives = [
+        [normalize_text(str(term)) for term in group]
+        for group in expected.get('must_include_any', [])
+        if group
+    ]
+    missing = [term for term in required if term not in normalized]
+    missing_alternatives = [group for group in alternatives if not any(term in normalized for term in group)]
+    if answerable:
+        passed = not refused and not missing and not missing_alternatives
+    else:
+        passed = refused
+    return {
+        'answerable_expected': answerable,
+        'answer_correct': bool(passed),
+        'false_refusal': bool(answerable and refused),
+        'missing_terms': missing,
+        'missing_alternatives': missing_alternatives,
+        'generation_status': generation_status,
+    }

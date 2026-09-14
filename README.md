@@ -116,6 +116,7 @@ uv run python eval.py --output artifacts/standard.json --write-review-template
 uv run python eval.py --k 1 --output artifacts/k1.json
 uv run python eval.py --prompt-variant concise --output artifacts/concise.json
 uv run python eval.py --compare artifacts/standard.json artifacts/concise.json --output artifacts/prompt_comparison.json
+uv run python eval.py --qa evaluation-dataset/round3_aliases.jsonl --output artifacts/round3_aliases.json
 ```
 
 Mỗi lần eval ghi file yêu cầu và một bản lưu có timestamp trong tên để không
@@ -140,6 +141,25 @@ uv run python eval.py --review-report artifacts/standard.json --review-file arti
 
 Report ID và hash từng câu trả lời ngăn dùng nhầm review cũ. Mọi câu phải có
 quyết định cụ thể và ghi chú; template để trống không được chấp nhận.
+
+Bộ `evaluation-dataset/round3_aliases.jsonl` là probe độc lập, không sửa golden
+dataset. Nó có 8 câu hỏi dùng cách gọi khác và ba ca eGFR 20/35/45. Mỗi dòng
+khai báo các tín hiệu tối thiểu cần có trong câu trả lời. Khi chạy với Gemini,
+`eval.py --qa ...` báo đúng hai chỉ số: `answer_correct_rate` (đạt hợp đồng
+tín hiệu) và `false_refusal_rate` (đáng lẽ trả lời được nhưng bị từ chối hoặc
+fallback). Đây là phép đo hồi quy có thể tái lập, vẫn cần đọc tay để kết luận
+đúng hoàn toàn về mặt y khoa.
+
+Điểm theo hai vòng kiểm chứng hiện tại:
+
+| Vòng | Test tự động | Probe answer-correct | Probe false-refusal |
+|---|---:|---:|---:|
+| Trước sửa guardrail (8 câu của vòng 2) | 59/59 | 6/8 = 75% | 2/8 = 25% |
+| Sau sửa guardrail (11 câu Round 3) | 59/59 | 11/11 = 100% | 0/11 = 0% |
+
+Report luôn ghi provider embedding, model, số chiều và classifier. Nếu Gemini
+không khả dụng, provider local/fallback được in rõ và các ca fallback không
+được tính là generation thành công.
 
 Kiểm chứng tất cả CLI và ca hội thoại, lưu log riêng:
 
