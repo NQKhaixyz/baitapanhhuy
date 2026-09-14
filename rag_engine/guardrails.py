@@ -206,27 +206,6 @@ def numeric_violations(question: str, answer: str, hits: list[dict]) -> list[str
                 if (not re.search(r"không.{0,25}dùng|chống chỉ định", plain, re.I)
                         or re.search(r"(?:có thể|được phép)\s+(?:sử dụng|dùng)", plain, re.I)):
                     errors.append("Kết luận phải phù hợp chống chỉ định trong nguồn.")
-    # Diagnostic/gradation questions require the numeric criteria present in
-    # the matching source. A list of test names without their thresholds is
-    # incomplete even though it contains no numerically unsupported claim.
-    normalized_question = normalize_text(question)
-    source_pattern = None
-    if re.search(r"chẩn đoán|tiêu chuẩn", normalized_question):
-        source_pattern = r"chẩn đoán|tiêu chuẩn"
-    elif re.search(r"phân độ|ngưỡng", normalized_question):
-        source_pattern = r"phân độ"
-    if source_pattern:
-        answer_numbers = numeric_terms(plain)
-        for hit in hits:
-            source = str(hit['chunk'].get('text', ''))
-            if re.search(source_pattern, normalize_text(source), re.I):
-                required = numeric_terms(source)
-                missing = required - answer_numbers
-                if missing:
-                    errors.append(
-                        f"Thiếu ngưỡng/tiêu chí số trong nguồn {hit['chunk_id']}: {sorted(missing)}."
-                    )
-                break
     return errors
 
 

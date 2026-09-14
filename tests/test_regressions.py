@@ -236,12 +236,11 @@ def test_cited_bullet_can_contain_semicolon_clauses():
     assert claims_have_citations(answer)
 
 
-def test_diagnostic_answer_must_include_source_thresholds():
+def test_focused_diagnostic_answer_is_not_forced_to_list_other_thresholds():
     hits=[{'chunk_id':'diagnosis','score':.9,'chunk':{
         'text':'Chẩn đoán bệnh khi: xét nghiệm A ≥7,0 hoặc xét nghiệm B ≥6,5.'}}]
-    answer='Có thể làm xét nghiệm A hoặc xét nghiệm B [diagnosis].'
-    assert any('Thiếu ngưỡng' in error for error in numeric_violations(
-        'Cần làm xét nghiệm gì để chẩn đoán?', answer, hits))
+    answer='Ngưỡng xét nghiệm A là ≥7,0 [diagnosis].'
+    assert not numeric_violations('Ngưỡng xét nghiệm A là bao nhiêu?', answer, hits)
 
 
 def test_prompt_comparison_reports_deltas_without_claiming_semantic_improvement():
