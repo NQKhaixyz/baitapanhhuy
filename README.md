@@ -77,6 +77,8 @@ C3 rewrite → C2 validate → C2 route → C0 retrieve → C1 synthesize → C1
   `hybrid` vẫn dùng LLM cho câu mơ hồ để nhận ra câu hỏi y khoa ngoài corpus,
   nhưng lỗi mạng/quota không làm engine sập.
 - Router ưu tiên chủ đề/guideline được nhắc rõ; có thể giữ nhiều guideline.
+  Alias lấy từ metadata nhận cả tên/viết tắt có dấu và không dấu (`THA`,
+  `ĐTĐ`, `DTD`, `tang huyet ap`) cùng `guideline_id`.
   Khi không có chủ đề rõ, dùng điểm cosine theo guideline. Lọc candidate trước
   khi tính top-k; log có toàn bộ `candidates_before_search`, rồi ID và score.
 - `synthesize` chỉ gọi model khi vượt ngưỡng relevance. Model luôn được phép
@@ -156,7 +158,7 @@ fallback). Đây là phép đo hồi quy có thể tái lập, vẫn cần đọ
 | Vòng | Test tự động | Probe answer-correct | Probe false-refusal |
 |---|---:|---:|---:|
 | Trước sửa guardrail (8 câu của vòng 2) | 59/59 | 6/8 = 75% | 2/8 = 25% |
-| Sau audit bổ sung (11 câu Round 3) | 67/67 | 11/11 = 100% | 0/11 = 0% |
+| Sau audit bổ sung (11 câu Round 3) | 74/74 | 11/11 = 100% | 0/11 = 0% |
 
 Report luôn ghi provider embedding, model, số chiều và classifier. Nếu Gemini
 không khả dụng, provider local/fallback được in rõ và các ca fallback không
