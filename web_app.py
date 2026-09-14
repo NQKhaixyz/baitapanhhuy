@@ -253,7 +253,7 @@ class EngineService:
             return {"answer": answer, "hits": self._hits(hits),
                     "trace": [{"text": "C0 retrieve", "kind": "good"},
                               {"text": "C1 synthesize", "kind": "good" if generation.get("status") in {"answered", "partial"} else "bad"}],
-                    "diagnostics": {"answerability": gate.as_dict(), "generation": generation,
+                    "diagnostics": {"query": query, "answerability": gate.as_dict(), "generation": generation,
                                     "citations": citation_ids(answer)}}
         if stage == "2":
             graph = MiniRAGGraph(self.retriever, top_k=k, threshold=threshold,

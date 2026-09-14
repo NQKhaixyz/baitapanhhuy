@@ -136,6 +136,30 @@ def refusal_text(answer: str) -> bool:
     return any(phrase in normalized for phrase in phrases)
 
 
+def question_intent_violations(question: str, answer: str) -> list[str]:
+    """Require a condition or explicit limitation for ``when/indication`` questions."""
+    normalized_question = normalize_text(question)
+    normalized_answer = normalize_text(re.sub(r"\[[^\]]+\]", "", answer))
+    asks_when = bool(re.search(
+        r"(?:dùng|sử dụng|chỉ định|điều trị).{0,40}(?:khi nào|lúc nào|bao giờ)|"
+        r"(?:khi nào|lúc nào|bao giờ).{0,40}(?:dùng|sử dụng|chỉ định|điều trị)",
+        normalized_question,
+    ))
+    if not asks_when or is_pure_refusal(answer):
+        return []
+    has_condition_or_limit = bool(re.search(
+        r"(?:\bkhi\b|\btrong\b|\bđối với\b|\bchỉ định\b|\bđiều trị\b|"
+        r"tài liệu không (?:nêu|đề cập)|không tìm thấy|không đủ dữ kiện)",
+        normalized_answer,
+    ))
+    if has_condition_or_limit:
+        return []
+    return [
+        "Câu hỏi hỏi thời điểm/chỉ định nhưng câu trả lời chưa nêu điều kiện "
+        "hoặc giới hạn thông tin của tài liệu."
+    ]
+
+
 REFUSAL = "Không tìm thấy trong tài liệu."
 
 

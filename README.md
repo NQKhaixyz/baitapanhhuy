@@ -170,7 +170,7 @@ fallback). Đây là phép đo hồi quy có thể tái lập, vẫn cần đọ
 | Vòng | Test tự động | Probe answer-correct | Probe false-refusal |
 |---|---:|---:|---:|
 | Trước sửa guardrail (8 câu của vòng 2) | 59/59 | 6/8 = 75% | 2/8 = 25% |
-| Sau audit bổ sung + web UI (11 câu Round 3) | 82/82 | 11/11 = 100% | 0/11 = 0% |
+| Sau audit bổ sung + web UI + intent guardrail (11 câu Round 3) | 83/83 | 11/11 = 100% | 0/11 = 0% |
 
 Report luôn ghi provider embedding, model, số chiều và classifier. Nếu Gemini
 không khả dụng, provider local/fallback được in rõ và các ca fallback không

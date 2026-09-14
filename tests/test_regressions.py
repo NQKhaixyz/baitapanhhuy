@@ -9,7 +9,8 @@ from rag_engine.io_utils import read_jsonl
 from rag_engine.retrieval import Retriever
 from rag_engine.graph import MiniRAGGraph
 from rag_engine.conversation import ConversationMemory
-from rag_engine.guardrails import REFUSAL, numeric_terms, numeric_violations
+from rag_engine.guardrails import (REFUSAL, numeric_terms, numeric_violations,
+                                   question_intent_violations)
 from rag_engine.synthesis import (
     GENERATION_PARAMETERS,
     answer_violations,
@@ -132,6 +133,15 @@ def test_numeric_guard_requires_clear_conclusion_outside_contraindication():
              'Marker 45 ≥30 nên không thuộc ngưỡng chống chỉ định này [source].')
     assert numeric_violations(question, unclear, hits)
     assert not numeric_violations(question, clear, hits)
+
+
+def test_when_question_does_not_accept_role_only_answer():
+    question = 'Metformin dùng khi nào?'
+    assert question_intent_violations(question, 'Metformin là thuốc đầu tay [source].')
+    assert not question_intent_violations(
+        question,
+        'Tài liệu nêu metformin là thuốc đầu tay; tài liệu không nêu cụ thể khi nào bắt đầu dùng [source].',
+    )
 
 
 def test_disclaimer_plus_dose_is_not_correct_refusal(retriever):
