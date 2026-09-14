@@ -70,11 +70,12 @@ def assess_answerability(
     threshold: float,
     min_query_coverage: float,
 ) -> Answerability:
-    """Đánh giá relevance bằng score + lexical evidence coverage.
+    """Đánh giá relevance bằng điểm cosine và ghi lại lexical coverage.
 
-    Cosine một mình không đủ để nhận diện câu hỏi ngoài corpus: một câu hỏi
-    không có đáp án vẫn có thể gần một chunk cùng chủ đề. Coverage là guardrail
-    tổng quát thứ hai; nó không biết tên thuốc, bệnh hay entity cụ thể nào.
+    Coverage chỉ là telemetry. Dùng nó làm cổng chặn sẽ phạt các câu hỏi dùng
+    từ đồng nghĩa (ví dụ ``độ lọc cầu thận`` thay cho ``eGFR``), trong khi
+    embedding đã đo độ gần nghĩa. Quyết định nội dung cuối cùng thuộc prompt,
+    citation hậu kiểm và manual review.
     """
 
     if not hits:
@@ -95,14 +96,6 @@ def assess_answerability(
 
     if not query_tokens:
         return Answerability(False, top_score, coverage, tuple(matched), "empty_query_terms")
-    if coverage < min_query_coverage:
-        return Answerability(
-            False,
-            top_score,
-            coverage,
-            tuple(matched),
-            "insufficient_query_evidence",
-        )
     return Answerability(True, top_score, coverage, tuple(matched), "evidence_ok")
 
 

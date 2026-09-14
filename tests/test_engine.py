@@ -142,8 +142,8 @@ def test_threshold_skips_generation_for_low_score():
     assert answer == "Không tìm thấy trong tài liệu."
 
 
-def test_evidence_coverage_skips_generation_for_unseen_question():
-    """Score cao nhưng query không có thuật ngữ chung vẫn phải abstain."""
+def test_high_score_synonym_query_is_allowed_to_reach_generation():
+    """Coverage thấp không được chặn synonym; failed generation vẫn fallback an toàn."""
 
     class MustNotBeCalled:
         def generate(self, _prompt):  # pragma: no cover - gọi nhầm là test fail
@@ -159,7 +159,8 @@ def test_evidence_coverage_skips_generation_for_unseen_question():
         threshold=0.2,
         generator=MustNotBeCalled(),
     )
-    assert answer == "Không tìm thấy trong tài liệu."
+    assert answer.startswith("Không tìm thấy trong tài liệu.")
+    assert "chunk_a" in answer
 
 
 def test_generation_failure_returns_cited_extractive_fallback():
