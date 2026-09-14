@@ -236,6 +236,16 @@ def test_cited_bullet_can_contain_semicolon_clauses():
     assert claims_have_citations(answer)
 
 
+def test_compact_comma_separated_citations_are_valid():
+    answer='Cấp cứu có tổn thương cơ quan đích; khẩn trương chưa có [acute, urgent].'
+    result = cite_answer(answer, [
+        {'chunk_id': 'acute', 'chunk': {'text': 'Cấp cứu có tổn thương cơ quan đích.'}},
+        {'chunk_id': 'urgent', 'chunk': {'text': 'Khẩn trương chưa có tổn thương.'}},
+    ])
+    assert result['citation_contract_ok']
+    assert result['citations'] == ['acute', 'urgent']
+
+
 def test_conclusion_can_inherit_immediately_previous_citation():
     answer=('Nguồn ghi eGFR <30 là chống chỉ định [source]. '
             'Với eGFR 45, không thuộc ngưỡng này nên có thể dùng [source].')
