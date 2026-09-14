@@ -309,7 +309,14 @@ def synthesize_answer(
             info['api_calls'] += getattr(active, 'api_calls', calls_before) - calls_before
             info['model'] = getattr(active, 'model', type(active).__name__)
         info['cache_hits'] += int(getattr(active, 'last_cache_hit', False))
-        errors = answer_violations(query, answer, hits, gate)
+        # A repair turn must not turn an otherwise repairable answer into a
+        # refusal merely because the model wants to avoid a citation error.
+        # A first-turn refusal remains valid when the gate allowed generation;
+        # a refusal after a failed repair is rejected and falls back safely.
+        errors = (["Không được đổi sang từ chối sau lượt sửa; giữ kết luận có "
+                   "căn cứ và sửa lỗi được nêu."]
+                  if attempt and is_pure_refusal(answer)
+                  else answer_violations(query, answer, hits, gate))
         LOGGER.info('synthesize attempt=%d raw=%r violations=%s', attempt+1, answer, errors)
         if not errors:
             status = 'refused' if is_pure_refusal(answer) else ('partial' if refusal_text(answer) else 'answered')
@@ -318,6 +325,9 @@ def synthesize_answer(
         info['last_violations'] = errors
         prompt = (base + "\nCÂU TRẢ LỜI CẦN SỬA:\n" + answer +
                   "\nLỗi: " + '; '.join(errors) +
-                  "\nSửa các lỗi dựa trên nguồn. Nếu nguồn không đủ, được phép trả lời chính xác: " + REFUSAL)
+                  "\nChỉ sửa đúng lỗi dựa trên CONTEXT. Giữ các kết luận đã có căn cứ, "
+                  "bổ sung citation còn thiếu và không chuyển thành câu từ chối chỉ "
+                  "để tránh lỗi. Chỉ dùng câu từ chối nếu CONTEXT thật sự không có "
+                  "bằng chứng cho câu hỏi, không phải để né lỗi citation.")
     info.update(status='fallback', reason='invalid_response')
     return context_fallback(hits)

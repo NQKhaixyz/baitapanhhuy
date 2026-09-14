@@ -236,6 +236,28 @@ def test_cited_bullet_can_contain_semicolon_clauses():
     assert claims_have_citations(answer)
 
 
+def test_conclusion_can_inherit_immediately_previous_citation():
+    answer=('Nguồn ghi eGFR <30 là chống chỉ định [source]. '
+            'Với eGFR 45, không thuộc ngưỡng này nên có thể dùng [source].')
+    assert claims_have_citations(answer)
+
+
+def test_refusal_after_failed_repair_is_not_accepted(retriever):
+    class Sequence:
+        def __init__(self): self.calls=0
+        def generate(self, _prompt):
+            self.calls += 1
+            return ('Kết luận có thể dùng metformin.' if self.calls == 1
+                    else REFUSAL)
+    info={}
+    answer=synthesize_answer(
+        'Bệnh nhân eGFR 45 có dùng metformin không?',
+        retriever.search('metformin', 2, ['dtd2020']),
+        generator=Sequence(), threshold=.18, diagnostics=info)
+    assert info['status']=='fallback' and info['attempts']==3
+    assert answer.startswith(REFUSAL) and 'Các đoạn tham khảo' in answer
+
+
 def test_focused_diagnostic_answer_is_not_forced_to_list_other_thresholds():
     hits=[{'chunk_id':'diagnosis','score':.9,'chunk':{
         'text':'Chẩn đoán bệnh khi: xét nghiệm A ≥7,0 hoặc xét nghiệm B ≥6,5.'}}]

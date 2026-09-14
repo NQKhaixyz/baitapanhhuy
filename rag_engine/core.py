@@ -196,11 +196,36 @@ class QuestionClassifier:
 
 
 def citation_ids(answer: str) -> list[str]:
-    return re.findall(r"\[([^\]]+)\]", answer)
+    ids: list[str] = []
+    for group in re.findall(r"\[([^\]]+)\]", answer):
+        # Accept both the prompt's canonical ``[a][b]`` and the compact
+        # ``[a, b]`` form often produced by models.
+        ids.extend(part.strip() for part in re.split(r"[,;]", group) if part.strip())
+    return ids
+
+
+_NUMBER_RE = re.compile(r"\d+(?:[.,]\d+)?")
+_INHERITABLE_CONCLUSION_PREFIXES = ("với ", "do đó", "vì vậy", "nên ", "trong trường hợp ")
+
+
+def _can_inherit_previous_citation(segment: str, previous: str | None) -> bool:
+    """Allow a short conclusion to inherit the immediately preceding source."""
+    if not previous or not citation_ids(previous):
+        return False
+    content = re.sub(r"\[[^\]]+\]", "", segment).strip(" -•\t`").lower()
+    if not content.startswith(_INHERITABLE_CONCLUSION_PREFIXES):
+        return False
+    # Do not silently bless new quantities or advice introduced without a
+    # source. A conclusion may repeat quantities already present in the cited
+    # sentence immediately before it.
+    previous_numbers = set(_NUMBER_RE.findall(re.sub(r"\[[^\]]+\]", "", previous)))
+    current_numbers = set(_NUMBER_RE.findall(content))
+    if not current_numbers.issubset(previous_numbers):
+        return False
+    return not re.search(r"hãy|tự điều chỉnh|nên tham khảo|khuyên", content)
 
 
 def claims_have_citations(answer: str) -> bool:
-    plain = re.sub(r"\[[^\]]+\]", "", answer)
     # A bullet may contain several source-backed clauses separated by ``;``
     # and put one citation at the end. Keep semicolons in the same claim.
     segments = re.split(r"\n+|(?<=[.!?])\s+(?!\[)", answer)
@@ -209,6 +234,9 @@ def claims_have_citations(answer: str) -> bool:
         if not content or citation_ids(segment) or is_refusal_clause(content):
             continue
         if content.endswith(":") and citation_ids(" ".join(segments[i + 1:i + 3])):
+            continue
+        previous = segments[i - 1] if i else None
+        if _can_inherit_previous_citation(segment, previous):
             continue
         return False
     return True
