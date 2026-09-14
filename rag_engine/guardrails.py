@@ -12,7 +12,7 @@ import re
 from typing import Any, Iterable
 
 from .embeddings import normalize_text
-from .core import citation_ids
+from .core import citation_ids, is_pure_refusal
 
 
 TOKEN_RE = re.compile(r"[0-9]+(?:[.,][0-9]+)?|[A-Za-zÀ-ỹĐđ]+", re.UNICODE)
@@ -70,7 +70,6 @@ def assess_answerability(
     hits: list[dict[str, Any]],
     *,
     threshold: float,
-    min_query_coverage: float,
 ) -> Answerability:
     """Đánh giá relevance bằng điểm cosine và ghi lại lexical coverage.
 
@@ -140,25 +139,6 @@ def refusal_text(answer: str) -> bool:
 REFUSAL = "Không tìm thấy trong tài liệu."
 
 
-def is_pure_refusal(answer: str) -> bool:
-    """Conservative full-string recognition: a disclaimer plus a dose is not refusal."""
-    plain = re.sub(r"\[[^\]]+\]", "", answer)
-    return normalize_text(plain).strip(" .,!?;`\"'-") in {
-        "không tìm thấy trong tài liệu", "không đủ dữ kiện",
-        "không có thông tin trong tài liệu", "không thể xác định từ tài liệu",
-    }
-
-
-def is_refusal_clause(text: str) -> bool:
-    """A bounded statement about missing information need not invent a citation."""
-    plain = normalize_text(re.sub(r"\[[^\]]+\]", "", text)).strip(" -•.?!`")
-    if is_pure_refusal(plain):
-        return True
-    return (plain.startswith(("không tìm thấy trong tài liệu về ", "tài liệu không đề cập ",
-                              "tài liệu không nêu ", "không có thông tin trong tài liệu về "))
-            and not re.search(r"\d|;|nhưng|tuy nhiên|hãy|nên|có thể", plain))
-
-
 NUMBER = r"\d+(?:[.,]\d+)?"
 COMPARISON = re.compile(
     rf"({NUMBER})\s*(<=|>=|<|>|≤|≥|=|nhỏ hơn|lớn hơn|cao hơn|thấp hơn|"
@@ -187,7 +167,9 @@ def numeric_violations(question: str, answer: str, hits: list[dict]) -> list[str
         return errors
     # Bind quantities to their cited source, not merely any number in the context.
     by_id = {h['chunk_id']: str(h['chunk'].get('text', '')) for h in hits}
-    for clause in re.split(r"\n+|(?<=[.!?;])\s+(?!\[)", answer):
+    # Keep semicolon-separated bullet clauses together because a citation at
+    # the end of the bullet supports the whole line (same contract as core).
+    for clause in re.split(r"\n+|(?<=[.!?])\s+(?!\[)", answer):
         ids = citation_ids(clause)
         source = ' '.join(by_id.get(i, '') for i in ids)
         for quantity in re.findall(rf"\b{NUMBER}\s*(?:đơn vị|mg|mcg|µg|IU|U/kg)\b", clause, re.I):

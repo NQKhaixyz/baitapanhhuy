@@ -45,7 +45,7 @@ def main():
     os.environ.update(env)
     from rag_engine.graph import MiniRAGGraph
     from rag_engine.retrieval import Retriever
-    from rag_engine.guardrails import REFUSAL, is_pure_refusal
+    from rag_engine.guardrails import is_pure_refusal
     from rag_engine.synthesis import GeminiAnswerGenerator
     from rag_engine.io_utils import read_jsonl, write_json
     from rag_engine.core import retrieval_metrics

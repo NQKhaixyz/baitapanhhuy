@@ -15,6 +15,7 @@ import os
 from pathlib import Path
 import re
 from typing import Any
+import unicodedata
 
 from .embeddings import normalize_text
 
@@ -26,6 +27,12 @@ LOGGER = logging.getLogger("mini_rag.core")
 
 def contains_phrase(text: str, phrase: str) -> bool:
     return bool(re.search(r"(?<!\w)" + re.escape(phrase) + r"(?!\w)", normalize_text(text)))
+
+
+def _fold_diacritics(text: str) -> str:
+    """Return a lowercase Vietnamese alias without diacritics."""
+    decomposed = unicodedata.normalize("NFD", normalize_text(text).replace("đ", "d"))
+    return "".join(char for char in decomposed if unicodedata.category(char) != "Mn")
 
 
 MEDICAL_SIGNALS = (
@@ -48,13 +55,17 @@ class SubjectIndex:
         self.aliases: dict[str, tuple[str, str]] = {}
         for chunk in chunks:
             gid = str(chunk.get("guideline_id", ""))
+            if gid:
+                self.aliases[normalize_text(gid)] = (gid, gid)
             title = re.split(r"\s+[–—-]\s+", str(chunk.get("guideline_title", "")))[0]
             title = re.sub(r"^HD\s+", "", title, flags=re.I).strip()
             if title:
-                self.aliases[normalize_text(title)] = (title, gid)
+                for alias in {normalize_text(title), _fold_diacritics(title)}:
+                    self.aliases[alias] = (title, gid)
                 abbreviation = "".join(w[0] for w in title.split()).lower()
                 if len(abbreviation) >= 2:
-                    self.aliases[abbreviation] = (title, gid)
+                    for alias in {normalize_text(abbreviation), _fold_diacritics(abbreviation)}:
+                        self.aliases[alias] = (title, gid)
             section = re.split(r"\s+[–—-]\s+", str(chunk.get("section_path", "")))[-1].strip()
             if re.fullmatch(r"[A-Za-z]{4,}", section):
                 self.aliases[section.lower()] = (section, gid)

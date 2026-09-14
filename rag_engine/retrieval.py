@@ -12,7 +12,6 @@ from .config import (
     DEFAULT_CORPUS_PATH,
     DEFAULT_EMBEDDING_CACHE,
     MAX_ROUTE_GUIDELINES,
-    MIN_QUERY_COVERAGE,
     RETRIEVAL_THRESHOLD,
     ROUTE_MARGIN,
 )
@@ -191,7 +190,6 @@ class Retriever:
         query: str,
         hits: list[dict[str, Any]],
         threshold: float = RETRIEVAL_THRESHOLD,
-        min_query_coverage: float = MIN_QUERY_COVERAGE,
     ):
         """Proxy để caller không cần biết module guardrail nội bộ."""
 
@@ -201,7 +199,6 @@ class Retriever:
             query,
             hits,
             threshold=threshold,
-            min_query_coverage=min_query_coverage,
         )
 
     def search_pairs(

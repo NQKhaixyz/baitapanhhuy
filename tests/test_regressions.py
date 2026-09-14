@@ -1,7 +1,6 @@
 """Behavioral regressions from the review; no network, no golden modifications."""
 import copy
 import logging
-from pathlib import Path
 import subprocess
 import sys
 import pytest
@@ -11,7 +10,12 @@ from rag_engine.retrieval import Retriever
 from rag_engine.graph import MiniRAGGraph
 from rag_engine.conversation import ConversationMemory
 from rag_engine.guardrails import REFUSAL, numeric_terms, numeric_violations
-from rag_engine.synthesis import synthesize_answer, answer_violations
+from rag_engine.synthesis import (
+    GENERATION_PARAMETERS,
+    answer_violations,
+    generation_cache_key,
+    synthesize_answer,
+)
 from rag_engine.evaluation import (answer_checks, probe_answer_checks,
                                    reference_terms_present)
 from rag_engine.core import retrieval_metrics
@@ -38,6 +42,12 @@ def offline(monkeypatch):
 
 @pytest.fixture
 def retriever(tmp_path): return Retriever(cache_path=tmp_path/'vectors.npy')
+
+
+def test_generation_cache_key_includes_generation_parameters(monkeypatch):
+    original = generation_cache_key('model', 'prompt')
+    monkeypatch.setitem(GENERATION_PARAMETERS, 'temperature', 0.9)
+    assert generation_cache_key('model', 'prompt') != original
 
 
 @pytest.mark.parametrize('query,category', [
@@ -140,6 +150,20 @@ def test_hybrid_classifier_uses_rules_for_clear_cases(monkeypatch, retriever):
     assert classifier.classify('Liều amlodipine là bao nhiêu?')[0]=='medical'
 
 
+@pytest.mark.parametrize('query,guideline_id', [
+    ('THA phân độ ra sao?', 'tha2022'),
+    ('tang huyet ap la gi?', 'tha2022'),
+    ('DTD cần xét nghiệm gì?', 'dtd2020'),
+    ('ĐTĐ cần xét nghiệm gì?', 'dtd2020'),
+    ('dtd2020 nói gì?', 'dtd2020'),
+    ('tha2022 nói gì?', 'tha2022'),
+])
+def test_subject_aliases_accept_accented_and_ascii_abbreviations(retriever, query, guideline_id):
+    classifier = QuestionClassifier(retriever.subjects, mode='rules')
+    assert classifier.classify(query)[0] == 'medical'
+    assert guideline_id in {gid for _name, gid in retriever.subjects.subjects(query)}
+
+
 def test_llm_classifier_handles_ambiguous_case_and_reports_source(monkeypatch, retriever):
     classifier=QuestionClassifier(retriever.subjects,mode='hybrid')
     monkeypatch.setattr(classifier,'_llm_result',lambda _q: ('medical',{
@@ -236,6 +260,10 @@ def test_fallback_references_keep_every_clause_cited(retriever):
 def test_cited_bullet_can_contain_semicolon_clauses():
     answer='- Cấp cứu: tổn thương cơ quan đích cấp; hạ áp tĩnh mạch [source].'
     assert claims_have_citations(answer)
+    dose = '- Liều đầu 5 mg; sau đó theo dõi [source].'
+    assert not numeric_violations('Liều đầu là bao nhiêu?', dose, [
+        {'chunk_id': 'source', 'chunk': {'text': 'Liều đầu 5 mg; sau đó theo dõi.'}},
+    ])
 
 
 def test_compact_comma_separated_citations_are_valid():

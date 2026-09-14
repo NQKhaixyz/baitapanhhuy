@@ -6,7 +6,6 @@ import os
 
 os.environ.setdefault("RAG_EMBEDDING_PROVIDER", "local")
 
-from rag_engine.config import DEFAULT_CORPUS_PATH
 from rag_engine.conversation import ConversationMemory
 from rag_engine.graph import MiniRAGGraph
 from rag_engine.retrieval import Retriever

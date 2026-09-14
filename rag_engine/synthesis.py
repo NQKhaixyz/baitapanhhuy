@@ -9,6 +9,7 @@ trước khi gọi model.
 from __future__ import annotations
 
 import hashlib
+import json
 import logging
 import os
 import re
@@ -21,15 +22,36 @@ from .embeddings import normalize_text
 from .guardrails import (
     Answerability,
     assess_answerability,
-    numeric_terms,
     refusal_text,
     unsupported_numbers,
     REFUSAL, is_pure_refusal, numeric_violations, required_comparison_sources,
 )
-from .core import answer_is_grounded, claims_have_citations, citation_ids
+from .core import answer_is_grounded, citation_ids
+from .core import claims_have_citations as claims_have_citations
 
 LOGGER = logging.getLogger("mini_rag.synthesis")
 _LAST_API_CALL = 0.0
+
+GENERATION_CACHE_SCHEMA = 2
+GENERATION_PARAMETERS = {
+    "candidate_count": 1,
+    "max_output_tokens": 1000,
+    "temperature": 0.2,
+}
+
+
+def generation_cache_key(model: str, prompt: str) -> str:
+    """Bind cached output to every input that can change generation."""
+    payload = {
+        "schema": GENERATION_CACHE_SCHEMA,
+        "model": model,
+        "parameters": GENERATION_PARAMETERS,
+        "prompt": prompt,
+    }
+    serialized = json.dumps(
+        payload, ensure_ascii=False, sort_keys=True, separators=(",", ":")
+    )
+    return hashlib.sha256(serialized.encode()).hexdigest()
 
 GROUNDING_INSTRUCTION = """Bạn là trợ lý tổng hợp thông tin y tế. Chỉ sử dụng thông tin có trong CONTEXT được cấp để trả lời.
 
@@ -108,9 +130,7 @@ class GeminiAnswerGenerator:
 
         global _LAST_API_CALL
         self.last_cache_hit = False
-        cache_key = hashlib.sha256(
-            f"{self.model}\n{prompt}".encode("utf-8")
-        ).hexdigest()
+        cache_key = generation_cache_key(self.model, prompt)
         cache_path = self.cache_dir / f"{cache_key}.txt"
         if cache_path.exists():
             self.last_cache_hit = True
@@ -128,11 +148,7 @@ class GeminiAnswerGenerator:
                 response = self.client.models.generate_content(
                     model=self.model,
                     contents=prompt,
-                    config=types.GenerateContentConfig(
-                        candidate_count=1,
-                        max_output_tokens=1000,
-                        temperature=0.2,
-                    ),
+                    config=types.GenerateContentConfig(**GENERATION_PARAMETERS),
                 )
                 break
             except Exception as exc:
@@ -283,7 +299,7 @@ def synthesize_answer(
     info.update(status="refused", attempts=0, api_calls=0, cache_hits=0,
                 prompt_variant=prompt_variant, prompt_hashes=[], model=None)
     query = standalone_query or question
-    gate = answerability or assess_answerability(query, hits, threshold=threshold, min_query_coverage=0.20)
+    gate = answerability or assess_answerability(query, hits, threshold=threshold)
     if not gate.answerable:
         info['reason'] = gate.reason
         return REFUSAL
